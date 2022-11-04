@@ -1,5 +1,5 @@
 from collections import defaultdict
-from ..tools.k8s import Kubectl
+from ....tools.k8s import Kubectl
 
 class Show(object):
     def __init__(self):
