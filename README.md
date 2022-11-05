@@ -70,4 +70,3 @@ Some examples:
 - `python run.py run-command slack-bot say \#test Hello everybody! :wave:`: Ask `slack-bot` to say something in a channel (the bot needs to be member of).
 - `python run.py run-command k8s show ads-dev ads-qa ads-prod`: Ask `k8s` bot to run the `show` command on the listed namespaces.
 
--
