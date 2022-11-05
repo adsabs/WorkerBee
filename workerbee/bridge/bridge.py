@@ -8,9 +8,18 @@ from .base import BridgeBase
 class Bridge(BridgeBase):
     def __init__(self):
         super().__init__()
+        self.stdout = True
         self.registered_bots = {}
-        self.reserved_bot_names = ("-",)
-        self.credentials = (("bot", self.bridge_password), ("cli", self.bridge_password))
+        self.registered_bot_names = {}
+        self.bridge_name = 'bridge'
+        self.credentials = ((self.bridge_username, self.bridge_password), )
+        self.available_commands = {
+            'register': self.register,
+            'deregister': self.deregister,
+            'proxy': self.proxy,
+            'list': self.list,
+            'help': self.help,
+        }
 
     def start(self):
         asyncio.run(self.bridge())
@@ -24,43 +33,100 @@ class Bridge(BridgeBase):
         ):
             await asyncio.Future()  # run forever
 
+
     async def bridge_handler(self, websocket):
-        if websocket.username.startswith("bot"):
-            bot_name = await websocket.recv() # First message is the name of the just connected process
-            if len(bot_name) == 0 or bot_name in self.reserved_bot_names:
-                await websocket.close()
-            else:
-                print(f"Connected: bot '{bot_name}'")
-                self.registered_bots[bot_name] = websocket
-                try:
-                    # I am a bot, wait for commands
-                    await websocket.wait_closed()
-                finally:
-                    del self.registered_bots[bot_name]
-        else:
-            print("Connected: non-bot")
-            # I am a not a bot, I just want to send a command to a bot
-            async for bot_command in websocket:
-                try:
-                    bot_name, command = bot_command.split(maxsplit=1)
-                except ValueError:
-                    await websocket.send(f"ERROR Unable to find bot name and command in '{bot_command}'")
-                else:
-                    bot = self.registered_bots.get(bot_name)
-                    if bot is not None:
-                        try:
-                            await bot.send(command)
-                            response = await bot.recv()
-                        except websockets.ConnectionClosed:
-                            del self.registered_bots[bot_name]
-                            await websocket.send(f"ERROR Connection lost, no bot with name '{bot_name}'")
-                        finally:
-                            await websocket.send(f"SUCCESS {response}")
+        await self.register(websocket, 'unnamed')
+        try:
+            async for payload in websocket:
+                command, payload = self.decompose(payload)
+
+                if self.stdout:
+                    if command == "proxy":
+                        print(command, payload.split("\n")[0])
                     else:
-                        bot_names = ", ".join([n for n in self.registered_bots.keys()])
-                        if bot_name in self.reserved_bot_names and command == "list":
-                            await websocket.send(f"SUCCESS '{bot_names}'")
-                        else:
-                            await websocket.send(f"ERROR No bot with name '{bot_name}', registered bots: '{bot_names}'")
+                        print(command, payload)
+
+                if command in self.available_commands:
+                    code, response = await self.available_commands[command](websocket, payload)
+                elif len(command) > 0:
+                    code, response = "ERROR", f"Unknown command: `{command}`"
+                else:
+                    code, response = "ERROR", f"Unknown command"
+                await websocket.send(f"{code} {response}")
+        except websockets.ConnectionClosed:
+            pass
+        finally:
+            await self.deregister(websocket, [])
 
 
+    #--------------------------------------------------------------------------------
+    async def register(self, websocket, payload):
+        bot_name, _ = self.decompose(payload)
+        if len(bot_name) > 0:
+            if bot_name == self.bridge_name:
+                code = "ERROR"
+                response = f"'{bot_name}' is a reserved name"
+            else:
+                self.registered_bots[str(websocket.id)] = (bot_name, websocket)
+                if bot_name != "unnamed":
+                    self.registered_bot_names[bot_name] = str(websocket.id)
+                code = "SUCCESS"
+                response = "registered"
+        else:
+            code = "ERROR"
+            response = "Missing argument"
+        return code, response
+
+    async def deregister(self, websocket, payload):
+        bot_id = str(websocket.id)
+        bot_name, _ = self.registered_bots.pop(bot_id, ('', None))
+        if bot_name in self.registered_bot_names:
+            del self.registered_bot_names[bot_name]
+        if bot_name:
+            code = "SUCCESS"
+            response = "Deregistered"
+        else:
+            code = "ERROR"
+            response = "Missing argument"
+        return code, response
+
+    async def list(self, websocket, payload):
+        code = "SUCCESS"
+        response = f"{', '.join([self.bridge_name] + [n for n in self.registered_bot_names.keys()])}"
+        return code, response
+
+    async def proxy(self, websocket, payload):
+        from_bot_name, _ = self.registered_bots.get(str(websocket.id), "unnamed")
+        if from_bot_name == "unnamed":
+            from_bot_name = str(websocket.id)
+        to_bot_name, command = self.decompose(payload)
+        if len(to_bot_name) > 0 and len(command) > 0:
+            _, bot = self.registered_bots.get(self.registered_bot_names.get(to_bot_name), self.registered_bots.get(to_bot_name, ('', None))) # to_bot_name may be a name or directly an ID, try both
+            if bot is not None:
+                try:
+                    await bot.send(f"proxy {from_bot_name} {command}")
+                    #response = await bot.recv()
+                    code = "SUCCESS"
+                    response = "Proxied"
+                except websockets.ConnectionClosed:
+                    await self.deregister(bot, [])
+                    code = "ERROR"
+                    response = f"Connection lost [{to_bot_name}]"
+                else:
+                    code = "SUCCESS"
+                    response = f"{response}"
+            else:
+                bot_names = ", ".join([self.bridge_name] + [n for n in self.registered_bot_names.keys()])
+                code = "ERROR"
+                response = f"No bot with name '{to_bot_name}', registered bots: '{bot_names}'"
+        else:
+            code = "ERROR"
+            response = "Missing arguments"
+        return code, response
+
+    async def help(self, websocket, payload):
+        code = "SUCCESS"
+        output = f"> Use `{self.bridge_name}` followed by one of these commands:\n"
+        output += """\t- `list`: list registered bots\n"""
+        #output += """\t- `help`: print instructions\n"""
+        return code, output

@@ -15,3 +15,12 @@ class BridgeBase(object):
     def start(self):
         raise NotImplementedError
 
+    def decompose(self, msg):
+        leading = ''
+        payload = ''
+        splitted_msg = msg.split(maxsplit=1)
+        if len(splitted_msg) > 0:
+            leading = splitted_msg[0]
+        if len(splitted_msg) > 1:
+            payload = splitted_msg[1]
+        return leading, payload

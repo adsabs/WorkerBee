@@ -63,7 +63,7 @@ class Show(object):
 
     def run(self, namespaces):
         if len(namespaces) == 0:
-            return "Missing arguments. Type `@WorkerBee help` for help."
+            return "Missing arguments."
 
         data = defaultdict(list)
         for namespace in namespaces:
@@ -79,5 +79,5 @@ class Show(object):
         return "```{}```".format("\n".join(deployments_show))
 
     def help(self):
-        return """- `show`: list kubernetes deployments ```show ads-dev ads-qa ads-prod```\n"""
+        return """\t- `show`: list kubernetes deployments ```show ads-dev ads-qa ads-prod```\n"""
 

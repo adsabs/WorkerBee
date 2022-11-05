@@ -3,10 +3,9 @@ import sys
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from .commands.say import Say
-from .commands.show import Show
 from .commands.help import Help
-
 from ...bridge import BridgeBot
+from ...bridge import Command
 
 class SlackBot(BridgeBot):
     def __init__(self, bot_name="slack-bot"):
@@ -28,9 +27,8 @@ class SlackBot(BridgeBot):
         self.app.event("app_mention")(self.mention_handler)
         self.app.event("message")(self.handle_message_events)
         self.available_commands = {
-            'show': Show(),
             'say': Say(self.app.client),
-            'help': Help(),
+            'help': Help(bot_name),
         }
 
 
@@ -39,19 +37,14 @@ class SlackBot(BridgeBot):
         self.bot_handler.connect()
         super().start()
 
-    def _parse(self, msg):
-        command = ''
-        arguments = []
-        splitted_msg = msg.split() # Example: 'show ads-dev ads-prod'
-        if len(splitted_msg) > 0:
-            command = splitted_msg[0] # Example: 'show'
-            arguments = splitted_msg[1:] # Example: ['ads-dev', 'ads-prod']
-        return command, arguments
-
     def react(self, msg):
-        command, arguments = self._parse(msg)
+        command, payload = self.decompose(msg)
         if command in self.available_commands:
-            return self.available_commands[command].run(arguments)
+            return self.available_commands[command].run(payload)
+        elif len(payload) > 0:
+            bot_name, command = self.decompose(msg)
+            cmd = Command(bot_name)
+            return cmd.run(command)
         elif len(command) > 0:
             return "Unknown command: `{}`. Type `@WorkerBee help` for help.".format(command)
         else:

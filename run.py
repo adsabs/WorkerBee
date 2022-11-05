@@ -7,11 +7,12 @@ def cli():
     pass
 
 @cli.command()
-def start_slack_bot():
+@click.argument('bot_name', default='slack-bot')
+def start_slack_bot(bot_name):
     click.echo('Starting Slack bot')
     from workerbee.bots.slack import SlackBot
-    c = SlackBot()
-    c.start()
+    slack = SlackBot(bot_name=bot_name)
+    slack.start()
 
 @cli.command()
 def start_bridge():
@@ -20,19 +21,21 @@ def start_bridge():
     bridge = Bridge()
     bridge.start()
 
-#@cli.command()
-#@click.argument('bot_name')
-#def start_bridge_worker(bot_name):
-    #from workerbee import websocket
-    #websocket.start_bot(bot_name, websocket.print_callback)
+@cli.command()
+@click.argument('bot_name', default='k8s')
+def start_kubernetes_bot(bot_name):
+    click.echo('Starting Kubernetes bot')
+    from workerbee.bots.kubernetes import KubernetesBot
+    k8s = KubernetesBot(bot_name=bot_name)
+    k8s.start()
 
 @cli.command()
 @click.argument('bot_name')
-@click.argument('command', nargs=-1)
+@click.argument('command', required=True, nargs=-1)
 def run_command(bot_name, command):
     from workerbee.bridge import Command
-    c = Command(bot_name)
-    c.run(" ".join(command))
+    cmd = Command(bot_name)
+    print(cmd.run(" ".join(command)))
 
 
 if __name__ == "__main__":

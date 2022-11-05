@@ -3,20 +3,14 @@ class Say(object):
     def __init__(self, client):
         self.client = client
 
-    def run(self, arguments):
-        output = "You can interact with me using the following commands:\n"
-        output += self.help()
-        output += Show().help()
-        return output
-
     def help(self):
-        return """- `say`: make me say something in a channel I am member of ```say #chatops hi!```\n"""
-
+        return """\t- `say`: make me say something in a channel I am member of ```say #chatops hi!```\n"""
 
     def run(self, payload):
+        payload = payload.split(maxsplit=1)
         if len(payload) > 1:
             target_channel = payload[0]
-            message = " ".join(payload[1:])
+            message = payload[1]
         else:
             return f"ERROR Unable to find channel and message in '{payload}'"
         if target_channel.startswith("#"):
